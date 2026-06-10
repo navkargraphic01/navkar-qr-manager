@@ -1,0 +1,38 @@
+# ============================================================
+# NAVKAR QR MANAGER - .gitignore
+# Add this file to BOTH frontend/ and backend/ folders
+# ============================================================
+
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.production
+
+# Node modules - install with npm install
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Uploads (temporary files)
+uploads/
+
+# Cache
+.cache/
+.parcel-cache/
