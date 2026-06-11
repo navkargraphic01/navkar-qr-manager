@@ -142,7 +142,7 @@ BEGIN
   qr_id := prefix_val || LPAD(next_val::TEXT, 3, '0');
   RETURN qr_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
 -- 6. URL CHANGE HISTORY TABLE
