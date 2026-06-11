@@ -13,11 +13,13 @@ import Analytics from './pages/Analytics'
 import DesignStudio from './pages/DesignStudio'
 import BulkUpload from './pages/BulkUpload'
 import Settings from './pages/Settings'
+import QRRedirect from './pages/QRRedirect'
 
 function Router() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/p/:qrId" element={<QRRedirect />} />
       <Route
         path="/"
         element={

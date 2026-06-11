@@ -16,4 +16,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 })
 
 /** Build the public QR redirect URL for a given QR ID */
-export const getQrUrl = (qrId) => `https://qr.navkarplywood.com/p/${qrId}`
+export const getQrUrl = (qrId) => {
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  const base = isLocal ? window.location.origin : 'https://qr.navkarplywood.com'
+  return `${base}/p/${qrId}`
+}

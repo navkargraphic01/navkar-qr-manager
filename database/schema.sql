@@ -510,3 +510,21 @@ GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
 GRANT INSERT ON public.scans TO anon;  -- Allow anonymous scan tracking
+
+-- ============================================================
+-- 15. AUTOMATIC SCAN COUNT TRIGGER
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.increment_qr_scan_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.qr_codes
+  SET scan_count = COALESCE(scan_count, 0) + 1,
+      last_scanned_at = NEW.scanned_at
+  WHERE id = NEW.qr_code_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER on_scan_inserted
+  AFTER INSERT ON public.scans
+  FOR EACH ROW EXECUTE FUNCTION public.increment_qr_scan_count();
