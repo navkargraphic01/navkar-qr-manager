@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { read, utils } from 'xlsx'
 import { writeFile } from 'xlsx'
@@ -12,9 +12,24 @@ export default function BulkUpload() {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState([])
   const [headers, setHeaders] = useState([])
+  const [templates, setTemplates] = useState([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
   const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    supabase.from('qr_templates').select('id, name').order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const presets = [
+          { id: 'classic', name: 'Classic White (Preset)' },
+          { id: 'wood-premium', name: 'Champagne Gold (Preset)' },
+          { id: 'industrial-dark', name: 'Industrial Dark (Preset)' }
+        ]
+        const dbTemplates = (data || []).map(t => ({ id: t.id, name: t.name }))
+        setTemplates([...presets, ...dbTemplates])
+      })
+  }, [])
 
   const onDrop = useCallback((files) => {
     const f = files[0]
@@ -87,6 +102,7 @@ export default function BulkUpload() {
           return
         }
 
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(selectedTemplateId)
         let success = 0
         const errors = []
 
@@ -108,6 +124,8 @@ export default function BulkUpload() {
               product_code: code || `AUTO-${i + 1}`,
               destination_url: url,
               status: 'active',
+              template_id: isUUID ? selectedTemplateId : null,
+              metadata: selectedTemplateId && !isUUID ? { preset_template_id: selectedTemplateId } : {},
               created_by: user.id,
               updated_by: user.id,
             })
@@ -234,14 +252,32 @@ export default function BulkUpload() {
         </div>
       )}
 
-      {/* Upload button */}
+      {/* Design Template Dropdown and Upload Button */}
       {file && !uploading && (
-        <button
-          onClick={handleUpload}
-          className="w-full py-2.5 bg-navkar-700 hover:bg-navkar-800 text-white font-semibold rounded-xl text-sm transition-colors"
-        >
-          Upload &amp; Create QR Codes
-        </button>
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+            <label className="block text-sm font-medium text-foreground">
+              Apply Design Template to Uploaded QR Codes
+            </label>
+            <select
+              value={selectedTemplateId}
+              onChange={e => setSelectedTemplateId(e.target.value)}
+              className="w-full px-3.5 py-2.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-navkar-700"
+            >
+              <option value="">No Template (Use Default Classic White)</option>
+              {templates.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">The selected template will be automatically linked to all generated QR codes.</p>
+          </div>
+          <button
+            onClick={handleUpload}
+            className="w-full py-2.5 bg-navkar-700 hover:bg-navkar-800 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm"
+          >
+            Upload &amp; Create QR Codes
+          </button>
+        </div>
       )}
     </div>
   )

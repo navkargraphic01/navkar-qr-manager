@@ -57,6 +57,20 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  const signUp = async (email, password, fullName) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName || ''
+        }
+      }
+    })
+    if (error) throw error
+    return data
+  }
+
   const signOut = async () => {
     await supabase.auth.signOut()
     localStorage.removeItem('navkar_session')
@@ -84,6 +98,7 @@ export function AuthProvider({ children }) {
       session,
       loading,
       signIn,
+      signUp,
       signOut,
       updateProfile,
       isAuthenticated: !!user,

@@ -5,9 +5,11 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../../context/AuthContext'
 
 export default function Login() {
-  const { signIn, isAuthenticated } = useAuth()
+  const { signIn, signUp, isAuthenticated } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [isSignUp, setIsSignUp] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -16,12 +18,19 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!email || !password) { toast.error('Please enter email and password'); return }
+    if (isSignUp && !fullName.trim()) { toast.error('Please enter your full name'); return }
     setLoading(true)
     try {
-      await signIn(email, password)
-      toast.success('Welcome back!')
+      if (isSignUp) {
+        await signUp(email, password, fullName)
+        toast.success('Registration request sent! Please check your email for verification.')
+        setIsSignUp(false)
+      } else {
+        await signIn(email, password)
+        toast.success('Welcome back!')
+      }
     } catch (err) {
-      toast.error(err.message || 'Login failed. Check your credentials.')
+      toast.error(err.message || 'Action failed. Check your inputs.')
     } finally {
       setLoading(false)
     }
@@ -51,11 +60,32 @@ export default function Login() {
                 <p className="text-white/70 text-xs">Dynamic QR Code Platform</p>
               </div>
             </div>
-            <p className="text-white/70 text-sm">Sign in to manage your QR codes</p>
+            <p className="text-white/70 text-sm">{isSignUp ? 'Create your administrator account' : 'Sign in to manage your QR codes'}</p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="px-8 py-6 space-y-4">
+            {isSignUp && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Full Name
+                </label>
+                <input
+                  id="login-fullname"
+                  type="text"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  placeholder="Navkar Admin"
+                  disabled={loading}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700
+                    bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white
+                    placeholder-gray-400 text-sm
+                    focus:outline-none focus:ring-2 focus:ring-navkar-700 focus:border-transparent
+                    transition-all disabled:opacity-50"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Email
@@ -114,10 +144,22 @@ export default function Login() {
                 disabled:opacity-70 disabled:cursor-not-allowed mt-6"
             >
               {loading
-                ? <><Loader2 size={16} className="animate-spin" /> Signing in...</>
-                : <>Sign In <ArrowRight size={16} /></>
+                ? <><Loader2 size={16} className="animate-spin" /> Processing...</>
+                : isSignUp 
+                  ? <>Create Account <ArrowRight size={16} /></>
+                  : <>Sign In <ArrowRight size={16} /></>
               }
             </button>
+
+            <div className="text-center mt-4 text-xs">
+              <button
+                type="button"
+                onClick={() => setIsSignUp(v => !v)}
+                className="text-navkar-700 hover:underline font-semibold"
+              >
+                {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+              </button>
+            </div>
           </form>
 
           <div className="px-8 pb-6 text-center">

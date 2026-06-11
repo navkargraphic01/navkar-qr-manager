@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Package, Tag, QrCode, Save, Download, AlertCircle, ArrowLeft, CheckCircle, Copy } from 'lucide-react'
+import { Package, Tag, QrCode, Save, Download, AlertCircle, ArrowLeft, CheckCircle, Copy, Printer } from 'lucide-react'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 import { supabase, getQrUrl } from '../lib/supabase'
+import PrintTagModal from '../components/PrintTagModal'
 import { useAuth } from '../context/AuthContext'
 
 // ─────────────────────────────────────────────────────────────
@@ -81,15 +82,29 @@ export default function CreateQR() {
     status: 'active',
   })
   const [categories, setCategories] = useState([])
+  const [templates, setTemplates] = useState([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState({})
   const [previewDataUrl, setPreviewDataUrl] = useState(null)
   const [created, setCreated] = useState(null)
+  const [printModalOpen, setPrintModalOpen] = useState(false)
 
-  // Fetch categories once
+  // Fetch categories and templates once
   useEffect(() => {
     supabase.from('categories').select('id, name, color').order('name')
       .then(({ data }) => setCategories(data || []))
+
+    supabase.from('qr_templates').select('id, name').order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const presets = [
+          { id: 'classic', name: 'Classic White (Preset)' },
+          { id: 'wood-premium', name: 'Champagne Gold (Preset)' },
+          { id: 'industrial-dark', name: 'Industrial Dark (Preset)' }
+        ]
+        const dbTemplates = (data || []).map(t => ({ id: t.id, name: t.name }))
+        setTemplates([...presets, ...dbTemplates])
+      })
   }, [])
 
   // Update QR preview when URL changes
@@ -130,6 +145,8 @@ export default function CreateQR() {
       const { data: qrId, error: rpcErr } = await supabase.rpc('generate_qr_id')
       if (rpcErr) throw rpcErr
 
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(selectedTemplateId)
+
       const { data: qr, error: insertErr } = await supabase
         .from('qr_codes')
         .insert({
@@ -143,6 +160,8 @@ export default function CreateQR() {
           warranty_pdf_url: form.warranty_pdf_url || null,
           installation_pdf_url: form.installation_pdf_url || null,
           status: form.status,
+          template_id: isUUID ? selectedTemplateId : null,
+          metadata: selectedTemplateId && !isUUID ? { preset_template_id: selectedTemplateId } : {},
           created_by: user.id,
           updated_by: user.id,
         })
@@ -231,8 +250,14 @@ export default function CreateQR() {
           </p>
           <div className="flex gap-3 justify-center">
             <button
-              onClick={handleDownload}
+              onClick={() => setPrintModalOpen(true)}
               className="flex items-center gap-2 px-5 py-2.5 bg-navkar-700 hover:bg-navkar-800 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Printer size={15} /> Print Designed Tag
+            </button>
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-2 px-5 py-2.5 border border-border hover:bg-muted text-foreground rounded-lg text-sm font-medium transition-colors"
             >
               <Download size={15} /> Download PNG
             </button>
@@ -250,6 +275,7 @@ export default function CreateQR() {
             </button>
           </div>
         </motion.div>
+        <PrintTagModal qrCode={created} isOpen={printModalOpen} onClose={() => setPrintModalOpen(false)} />
       </div>
     )
   }
@@ -313,6 +339,21 @@ export default function CreateQR() {
                 <option value="">No Category</option>
                 {categories.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Design Template */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Design Template</label>
+              <select
+                value={selectedTemplateId}
+                onChange={e => setSelectedTemplateId(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-navkar-700"
+              >
+                <option value="">No Template (Use Default Classic White)</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
             </div>

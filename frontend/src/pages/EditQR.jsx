@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Link2, Save, Download, Copy, Loader2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Link2, Save, Download, Copy, Loader2, AlertCircle, Printer } from 'lucide-react'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 import { supabase, getQrUrl } from '../lib/supabase'
+import PrintTagModal from '../components/PrintTagModal'
 import { useAuth } from '../context/AuthContext'
 
 function isValidUrl(url) {
@@ -18,11 +19,14 @@ export default function EditQR() {
   const [qr, setQr] = useState(null)
   const [form, setForm] = useState({})
   const [categories, setCategories] = useState([])
+  const [templates, setTemplates] = useState([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [urlHistory, setUrlHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [qrPreviewUrl, setQrPreviewUrl] = useState(null)
   const [changeReason, setChangeReason] = useState('')
+  const [printModalOpen, setPrintModalOpen] = useState(false)
 
   useEffect(() => { fetchData() }, [id])
 
@@ -38,24 +42,36 @@ export default function EditQR() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [qrRes, catRes, histRes] = await Promise.all([
+      const [qrRes, catRes, histRes, tplRes] = await Promise.all([
         supabase.from('qr_codes').select('*, categories(id,name,color)').eq('id', id).single(),
         supabase.from('categories').select('id,name,color').order('name'),
         supabase.from('url_history').select('*, profiles(full_name)').eq('qr_code_id', id).order('changed_at', { ascending: false }).limit(10),
+        supabase.from('qr_templates').select('id, name').order('created_at', { ascending: false }),
       ])
       if (qrRes.error || !qrRes.data) { toast.error('QR code not found'); navigate('/qr-codes'); return }
-      setQr(qrRes.data)
+      
+      const presets = [
+        { id: 'classic', name: 'Classic White (Preset)' },
+        { id: 'wood-premium', name: 'Champagne Gold (Preset)' },
+        { id: 'industrial-dark', name: 'Industrial Dark (Preset)' }
+      ]
+      const dbTemplates = (tplRes.data || []).map(t => ({ id: t.id, name: t.name }))
+      setTemplates([...presets, ...dbTemplates])
+
+      const qrData = qrRes.data
+      setQr(qrData)
       setForm({
-        product_name: qrRes.data.product_name,
-        product_code: qrRes.data.product_code,
-        destination_url: qrRes.data.destination_url,
-        category_id: qrRes.data.category_id ?? '',
-        description: qrRes.data.description ?? '',
-        batch_number: qrRes.data.batch_number ?? '',
-        warranty_pdf_url: qrRes.data.warranty_pdf_url ?? '',
-        installation_pdf_url: qrRes.data.installation_pdf_url ?? '',
-        status: qrRes.data.status,
+        product_name: qrData.product_name,
+        product_code: qrData.product_code,
+        destination_url: qrData.destination_url,
+        category_id: qrData.category_id ?? '',
+        description: qrData.description ?? '',
+        batch_number: qrData.batch_number ?? '',
+        warranty_pdf_url: qrData.warranty_pdf_url ?? '',
+        installation_pdf_url: qrData.installation_pdf_url ?? '',
+        status: qrData.status,
       })
+      setSelectedTemplateId(qrData.template_id || qrData.metadata?.preset_template_id || '')
       setCategories(catRes.data || [])
       setUrlHistory(histRes.data || [])
     } catch { toast.error('Error loading QR code') } finally { setLoading(false) }
@@ -79,6 +95,7 @@ export default function EditQR() {
           changed_by: user.id,
         })
       }
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(selectedTemplateId)
       const { error } = await supabase.from('qr_codes').update({
         product_name: form.product_name.trim(),
         product_code: form.product_code.trim().toUpperCase(),
@@ -89,6 +106,11 @@ export default function EditQR() {
         warranty_pdf_url: form.warranty_pdf_url || null,
         installation_pdf_url: form.installation_pdf_url || null,
         status: form.status,
+        template_id: isUUID ? selectedTemplateId : null,
+        metadata: {
+          ...(qr.metadata || {}),
+          preset_template_id: selectedTemplateId && !isUUID ? selectedTemplateId : null
+        },
         updated_by: user.id,
       }).eq('id', id)
       if (error) throw error
@@ -202,6 +224,19 @@ export default function EditQR() {
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Design Template</label>
+              <select
+                value={selectedTemplateId}
+                onChange={e => setSelectedTemplateId(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-navkar-700"
+              >
+                <option value="">No Template (Use Default Classic White)</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Status</label>
               <select
                 value={form.status}
@@ -234,14 +269,19 @@ export default function EditQR() {
                 <img src={qrPreviewUrl} alt="QR" className="w-36 h-36 mx-auto" />
                 <code className="text-xs text-navkar-700 font-mono mt-2 block">{qr?.qr_id}</code>
               </div>
-              <div className="flex gap-2 mt-4">
-                <button onClick={handleDownload} className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-navkar-700 hover:bg-navkar-800 text-white text-xs rounded-lg transition-colors">
-                  <Download size={13} /> Download
+              <div className="flex flex-col gap-2 mt-4">
+                <button onClick={() => setPrintModalOpen(true)} className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-navkar-700 hover:bg-navkar-800 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm">
+                  <Printer size={13} /> Print Designed Tag
                 </button>
-                <button onClick={() => navigator.clipboard.writeText(getQrUrl(qr.qr_id)).then(() => toast.success('Copied!'))}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs rounded-lg transition-colors">
-                  <Copy size={13} /> Copy URL
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={handleDownload} className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-border hover:bg-muted text-foreground text-xs rounded-lg transition-colors">
+                    <Download size={13} /> Download
+                  </button>
+                  <button onClick={() => navigator.clipboard.writeText(getQrUrl(qr.qr_id)).then(() => toast.success('Copied!'))}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs rounded-lg transition-colors">
+                    <Copy size={13} /> Copy URL
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -266,6 +306,7 @@ export default function EditQR() {
           )}
         </div>
       </div>
+      <PrintTagModal qrCode={qr} isOpen={printModalOpen} onClose={() => setPrintModalOpen(false)} />
     </div>
   )
 }
