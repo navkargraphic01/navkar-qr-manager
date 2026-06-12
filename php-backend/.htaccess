@@ -1,0 +1,49 @@
+# Apache .htaccess for Navkar QR Manager PHP Backend
+# Place this file in the php-backend/ directory (or public_html/ if deploying to root)
+
+Options -Indexes
+Options +FollowSymLinks
+
+# ─── Enable mod_rewrite ──────────────────────────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # RewriteBase / (Commented out to support subdirectories)
+
+    # Redirect /p/NP001 → index.php?id=NP001 (QR redirect - highest priority)
+    RewriteRule ^p/([A-Za-z0-9]+)/?$ index.php [QSA,L]
+
+    # Route all /api/* requests through index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# ─── Security Headers ─────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options    "nosniff"
+    Header always set X-Frame-Options           "DENY"
+    Header always set X-XSS-Protection         "1; mode=block"
+    Header always set Referrer-Policy           "strict-origin-when-cross-origin"
+</IfModule>
+
+# ─── CORS Preflight ───────────────────────────────────────────
+# Handled in PHP (config.php apply_cors_headers)
+# This catches OPTIONS before PHP runs
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
+
+# ─── Hide sensitive files ─────────────────────────────────────
+<FilesMatch "\.(env|sql|log|bak|sh|git)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# ─── PHP settings ─────────────────────────────────────────────
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+    php_value max_execution_time 120
+    php_value memory_limit 128M
+</IfModule>
